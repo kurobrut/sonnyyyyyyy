@@ -13,6 +13,8 @@ local equipRemote = ReplicatedStorage.Utilities.TypedRemote.EquipPickaxe
 --// STATES
 local autoFarm = false
 local equipped = false
+local currentTarget = nil
+local currentTween = nil
 
 --// UI
 local button = Instance.new("ImageButton")
@@ -83,7 +85,10 @@ local priority = {
 	SecretLuckyblock = true
 }
 
---// FIND BLOCK
+--// LUCKYBLOCK FOLDER
+local luckyFolder = workspace:WaitForChild("Luckyblocks")
+
+--// FIND NEAREST BLOCK
 local function getNearestBlock()
 	local char = player.Character
 	if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
@@ -91,7 +96,7 @@ local function getNearestBlock()
 	local root = char.HumanoidRootPart
 	local closest, dist = nil, math.huge
 	
-	for _, v in pairs(workspace:GetDescendants()) do
+	for _, v in pairs(luckyFolder:GetChildren()) do
 		if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") then
 			
 			if priority[v.Name] or string.find(v.Name:lower(),"luckyblock") then
@@ -109,29 +114,34 @@ local function getNearestBlock()
 	return closest
 end
 
---// TWEEN TELEPORT (SMOOTH)
+--// TWEEN MOVEMENT
 local function tp(block)
 	local char = player.Character
-	if char and char:FindFirstChild("HumanoidRootPart") then
-		
-		local root = char.HumanoidRootPart
-		local targetCFrame = block.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+	
+	local root = char.HumanoidRootPart
+	local targetCFrame = block.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
 
-		local tween = TweenService:Create(
-			root,
-			TweenInfo.new(0.25, Enum.EasingStyle.Linear),
-			{CFrame = targetCFrame}
-		)
-
-		tween:Play()
+	-- cancel old tween
+	if currentTween then
+		currentTween:Cancel()
 	end
+
+	currentTween = TweenService:Create(
+		root,
+		TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{CFrame = targetCFrame}
+	)
+
+	currentTween:Play()
+	currentTween.Completed:Wait()
 end
 
 --// LOOP
 local function farmLoop()
 	while autoFarm do
 		
-		-- Equip using remote + force visual
+		-- Equip tool
 		if not equipped then
 			pcall(function()
 				equipRemote:FireServer()
@@ -139,11 +149,7 @@ local function farmLoop()
 
 			task.wait(0.2)
 
-			local tool = getTool()
-			if not tool then
-				tool = equipTool()
-			end
-
+			local tool = getTool() or equipTool()
 			if tool then
 				equipped = true
 			end
@@ -154,16 +160,25 @@ local function farmLoop()
 			equipped = false
 		end
 
-		local block = getNearestBlock()
-		if block then
-			tp(block)
+		-- Reset target if gone
+		if currentTarget and not currentTarget:FindFirstChild("HumanoidRootPart") then
+			currentTarget = nil
+		end
+
+		-- Lock target
+		if not currentTarget then
+			currentTarget = getNearestBlock()
+		end
+
+		if currentTarget then
+			tp(currentTarget)
 		end
 
 		if tool then
 			tool:Activate()
 		end
 
-		task.wait(0.4)
+		task.wait(0.1)
 	end
 end
 
@@ -173,6 +188,7 @@ local function toggleFarm()
 	
 	if autoFarm then
 		equipped = false
+		currentTarget = nil
 		
 		button.BackgroundColor3 = Color3.fromRGB(200,255,200)
 		button.BackgroundTransparency = 0.3
@@ -182,6 +198,7 @@ local function toggleFarm()
 		task.spawn(farmLoop)
 	else
 		equipped = false
+		currentTarget = nil
 		
 		button.BackgroundColor3 = Color3.fromRGB(255,255,255)
 		button.BackgroundTransparency = 0.5
