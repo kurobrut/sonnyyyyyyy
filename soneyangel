@@ -2,6 +2,7 @@
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local gui = player:WaitForChild("PlayerGui"):WaitForChild("MainGui")
@@ -57,6 +58,23 @@ local function getTool()
 	return nil
 end
 
+--// FORCE EQUIP FROM BACKPACK
+local function equipTool()
+	local char = player.Character
+	local backpack = player:FindFirstChild("Backpack")
+
+	if not char or not backpack then return nil end
+
+	for _, tool in pairs(backpack:GetChildren()) do
+		if tool:IsA("Tool") then
+			tool.Parent = char
+			return tool
+		end
+	end
+	
+	return nil
+end
+
 --// PRIORITY BLOCKS
 local priority = {
 	AscendedLuckyblock = true,
@@ -91,11 +109,21 @@ local function getNearestBlock()
 	return closest
 end
 
---// TELEPORT
+--// TWEEN TELEPORT (SMOOTH)
 local function tp(block)
 	local char = player.Character
 	if char and char:FindFirstChild("HumanoidRootPart") then
-		char.HumanoidRootPart.CFrame = block.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
+		
+		local root = char.HumanoidRootPart
+		local targetCFrame = block.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
+
+		local tween = TweenService:Create(
+			root,
+			TweenInfo.new(0.25, Enum.EasingStyle.Linear),
+			{CFrame = targetCFrame}
+		)
+
+		tween:Play()
 	end
 end
 
@@ -103,12 +131,22 @@ end
 local function farmLoop()
 	while autoFarm do
 		
-		-- equip once
+		-- Equip using remote + force visual
 		if not equipped then
 			pcall(function()
 				equipRemote:FireServer()
 			end)
-			equipped = true
+
+			task.wait(0.2)
+
+			local tool = getTool()
+			if not tool then
+				tool = equipTool()
+			end
+
+			if tool then
+				equipped = true
+			end
 		end
 
 		local tool = getTool()
