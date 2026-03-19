@@ -1,0 +1,165 @@
+--// SERVICES
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local gui = player:WaitForChild("PlayerGui"):WaitForChild("MainGui")
+
+--// REMOTE
+local equipRemote = ReplicatedStorage.Utilities.TypedRemote.EquipPickaxe
+
+--// STATES
+local autoFarm = false
+local equipped = false
+
+--// UI
+local button = Instance.new("ImageButton")
+button.Name = "AutoFarmButton"
+button.AnchorPoint = Vector2.new(0, 0.5)
+button.BackgroundColor3 = Color3.fromRGB(255,255,255)
+button.BackgroundTransparency = 0.5
+button.Size = UDim2.new(0.07,0,0.09,0)
+button.Position = UDim2.new(0.01,0,0.3,0)
+button.Parent = gui
+
+local aspect = Instance.new("UIAspectRatioConstraint", button)
+aspect.AspectRatio = 1
+
+local corner = Instance.new("UICorner", button)
+corner.CornerRadius = UDim.new(0.15,0)
+
+local stroke = Instance.new("UIStroke", button)
+stroke.Thickness = 2.5
+
+local label = Instance.new("TextLabel")
+label.Size = UDim2.new(1,0,0.28,0)
+label.AnchorPoint = Vector2.new(0.5,1)
+label.Position = UDim2.new(0.5,0,1,-2)
+label.BackgroundTransparency = 1
+label.Text = "AutoFarm"
+label.TextColor3 = Color3.fromRGB(0,200,0)
+label.Font = Enum.Font.GothamBold
+label.TextScaled = true
+label.TextStrokeTransparency = 0
+label.Parent = button
+
+--// TOOL CHECK
+local function getTool()
+	local char = player.Character
+	if not char then return nil end
+	
+	for _, v in pairs(char:GetChildren()) do
+		if v:IsA("Tool") then
+			return v
+		end
+	end
+	return nil
+end
+
+--// PRIORITY BLOCKS
+local priority = {
+	AscendedLuckyblock = true,
+	JumboLuckyblock = true,
+	MythicalLuckyblock = true,
+	SecretLuckyblock = true
+}
+
+--// FIND BLOCK
+local function getNearestBlock()
+	local char = player.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+	
+	local root = char.HumanoidRootPart
+	local closest, dist = nil, math.huge
+	
+	for _, v in pairs(workspace:GetDescendants()) do
+		if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") then
+			
+			if priority[v.Name] or string.find(v.Name:lower(),"luckyblock") then
+				local d = (v.HumanoidRootPart.Position - root.Position).Magnitude
+				
+				if d < dist then
+					dist = d
+					closest = v
+				end
+			end
+			
+		end
+	end
+	
+	return closest
+end
+
+--// TELEPORT
+local function tp(block)
+	local char = player.Character
+	if char and char:FindFirstChild("HumanoidRootPart") then
+		char.HumanoidRootPart.CFrame = block.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
+	end
+end
+
+--// LOOP
+local function farmLoop()
+	while autoFarm do
+		
+		-- equip once
+		if not equipped then
+			pcall(function()
+				equipRemote:FireServer()
+			end)
+			equipped = true
+		end
+
+		local tool = getTool()
+		if not tool then
+			equipped = false
+		end
+
+		local block = getNearestBlock()
+		if block then
+			tp(block)
+		end
+
+		if tool then
+			tool:Activate()
+		end
+
+		task.wait(0.4)
+	end
+end
+
+--// TOGGLE FUNCTION
+local function toggleFarm()
+	autoFarm = not autoFarm
+	
+	if autoFarm then
+		equipped = false
+		
+		button.BackgroundColor3 = Color3.fromRGB(200,255,200)
+		button.BackgroundTransparency = 0.3
+		stroke.Color = Color3.fromRGB(0,180,0)
+		label.TextColor3 = Color3.fromRGB(0,180,0)
+		
+		task.spawn(farmLoop)
+	else
+		equipped = false
+		
+		button.BackgroundColor3 = Color3.fromRGB(255,255,255)
+		button.BackgroundTransparency = 0.5
+		stroke.Color = Color3.fromRGB(0,0,0)
+		label.TextColor3 = Color3.fromRGB(0,200,0)
+	end
+end
+
+--// BUTTON CLICK
+button.Activated:Connect(toggleFarm)
+
+--// KEYBIND (PRESS F)
+UIS.InputBegan:Connect(function(input, gp)
+	if gp then return end
+	
+	if input.KeyCode == Enum.KeyCode.F then
+		toggleFarm()
+	end
+end)
