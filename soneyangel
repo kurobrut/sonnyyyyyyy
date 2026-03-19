@@ -2,7 +2,7 @@
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local gui = player:WaitForChild("PlayerGui"):WaitForChild("MainGui")
@@ -14,7 +14,7 @@ local equipRemote = ReplicatedStorage.Utilities.TypedRemote.EquipPickaxe
 local autoFarm = false
 local equipped = false
 local currentTarget = nil
-local currentTween = nil
+local moving = false
 
 --// UI
 local button = Instance.new("ImageButton")
@@ -60,7 +60,7 @@ local function getTool()
 	return nil
 end
 
---// FORCE EQUIP FROM BACKPACK
+--// FORCE EQUIP
 local function equipTool()
 	local char = player.Character
 	local backpack = player:FindFirstChild("Backpack")
@@ -77,7 +77,7 @@ local function equipTool()
 	return nil
 end
 
---// PRIORITY BLOCKS
+--// PRIORITY
 local priority = {
 	AscendedLuckyblock = true,
 	JumboLuckyblock = true,
@@ -85,10 +85,10 @@ local priority = {
 	SecretLuckyblock = true
 }
 
---// LUCKYBLOCK FOLDER
+--// LUCKYBLOCKS FOLDER
 local luckyFolder = workspace:WaitForChild("Luckyblocks")
 
---// FIND NEAREST BLOCK
+--// FIND BLOCK
 local function getNearestBlock()
 	local char = player.Character
 	if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
@@ -114,34 +114,39 @@ local function getNearestBlock()
 	return closest
 end
 
---// TWEEN MOVEMENT
-local function tp(block)
+--// SMOOTH MOVEMENT (LERP)
+local function moveToBlock(block)
 	local char = player.Character
 	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
 	
 	local root = char.HumanoidRootPart
-	local targetCFrame = block.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
+	local target = block.HumanoidRootPart.Position + Vector3.new(0,0,3)
 
-	-- cancel old tween
-	if currentTween then
-		currentTween:Cancel()
-	end
+	local connection
+	connection = RunService.RenderStepped:Connect(function()
+		if not autoFarm or not block or not block.Parent then
+			connection:Disconnect()
+			moving = false
+			return
+		end
 
-	currentTween = TweenService:Create(
-		root,
-		TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{CFrame = targetCFrame}
-	)
+		local distance = (root.Position - target).Magnitude
+		
+		if distance < 2 then
+			connection:Disconnect()
+			moving = false
+			return
+		end
 
-	currentTween:Play()
-	currentTween.Completed:Wait()
+		root.CFrame = root.CFrame:Lerp(CFrame.new(target), 0.2)
+	end)
 end
 
 --// LOOP
 local function farmLoop()
 	while autoFarm do
 		
-		-- Equip tool
+		-- Equip
 		if not equipped then
 			pcall(function()
 				equipRemote:FireServer()
@@ -170,8 +175,10 @@ local function farmLoop()
 			currentTarget = getNearestBlock()
 		end
 
-		if currentTarget then
-			tp(currentTarget)
+		-- Move once (no spam)
+		if currentTarget and not moving then
+			moving = true
+			moveToBlock(currentTarget)
 		end
 
 		if tool then
@@ -182,7 +189,7 @@ local function farmLoop()
 	end
 end
 
---// TOGGLE FUNCTION
+--// TOGGLE
 local function toggleFarm()
 	autoFarm = not autoFarm
 	
@@ -207,10 +214,10 @@ local function toggleFarm()
 	end
 end
 
---// BUTTON CLICK
+--// BUTTON
 button.Activated:Connect(toggleFarm)
 
---// KEYBIND (PRESS F)
+--// KEYBIND (F)
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	
